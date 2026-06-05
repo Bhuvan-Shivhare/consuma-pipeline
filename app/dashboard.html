@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GenAI Pipeline · Dashboard</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --border:#e5e7eb; --line:#eef0f3;
+    --text:#111827; --muted:#6b7280; --faint:#9ca3af;
+    --accent:#2563eb; --accent-soft:#eff4ff;
+    --green:#15803d; --green-bg:#e8f7ee;
+    --amber:#b45309; --amber-bg:#fef4e5;
+    --red:#b91c1c; --red-bg:#fdeced;
+    --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.04);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 24px 64px;}
+
+  header{background:var(--card);border-bottom:1px solid var(--border);}
+  .hin{max-width:1140px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;gap:14px;}
+  .logo{width:32px;height:32px;border-radius:8px;background:var(--accent);color:#fff;
+        display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;}
+  .htxt h1{font-size:16px;margin:0;font-weight:650;}
+  .htxt p{font-size:12.5px;margin:0;color:var(--muted);}
+  .live{margin-left:auto;display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12.5px;}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--green);
+       box-shadow:0 0 0 3px var(--green-bg);}
+
+  .section-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;
+                 letter-spacing:.04em;margin:28px 2px 12px;}
+
+  /* pipeline */
+  .flow{display:flex;align-items:center;gap:10px;overflow-x:auto;padding-bottom:4px;}
+  .stage{background:var(--card);border:1px solid var(--border);border-radius:12px;
+         padding:14px 16px;min-width:150px;flex:1;box-shadow:var(--shadow);}
+  .stage.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+  .stage .s-name{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
+  .stage .s-num{font-size:28px;font-weight:700;margin-top:2px;}
+  .stage .s-sub{font-size:12px;color:var(--faint);margin-top:1px;}
+  .stage.dlq{border-style:dashed;}
+  .stage.dlq.hot{background:var(--red-bg);border-color:#f3b4b4;}
+  .stage.dlq.hot .s-num{color:var(--red);}
+  .arrow{color:var(--faint);font-size:18px;flex:0 0 auto;}
+  .slots{display:flex;gap:4px;margin-top:8px;}
+  .slot{width:13px;height:13px;border-radius:4px;background:var(--line);border:1px solid var(--border);}
+  .slot.on{background:var(--accent);border-color:var(--accent);}
+
+  /* stat cards */
+  .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+  .ccard{background:var(--card);border:1px solid var(--border);border-radius:12px;
+         padding:14px 16px;box-shadow:var(--shadow);}
+  .ccard .v{font-size:24px;font-weight:700;}
+  .ccard .k{font-size:12px;color:var(--muted);margin-top:2px;}
+
+  /* panel */
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;
+         box-shadow:var(--shadow);margin-top:14px;overflow:hidden;}
+  .panel-head{display:flex;justify-content:space-between;align-items:center;
+              padding:14px 18px;border-bottom:1px solid var(--line);}
+  .panel-head h2{font-size:14.5px;margin:0;font-weight:650;}
+  .panel-head .meta{font-size:12.5px;color:var(--faint);}
+  .panel-body{padding:18px;}
+
+  textarea{width:100%;border:1px solid var(--border);border-radius:9px;padding:11px 12px;
+           font:inherit;color:var(--text);resize:vertical;min-height:78px;background:#fff;}
+  textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+  .btns{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;}
+  button{font:inherit;font-size:13.5px;font-weight:550;padding:9px 16px;border-radius:9px;
+         cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text);
+         transition:background .12s,border-color .12s;}
+  button:hover{background:#f9fafb;}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  button.primary:hover{background:#1d4fd8;}
+  button.danger{color:var(--red);border-color:#f0c2c2;}
+  button.danger:hover{background:var(--red-bg);}
+
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;
+     letter-spacing:.03em;padding:0 18px 10px;}
+  td{padding:12px 18px;border-top:1px solid var(--line);font-size:13.5px;vertical-align:middle;}
+  thead th{padding-top:16px;}
+  td.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:var(--muted);}
+
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+         padding:4px 10px;border-radius:999px;}
+  .badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .b-done{background:var(--green-bg);color:var(--green);}
+  .b-run{background:var(--amber-bg);color:var(--amber);}
+  .b-fail{background:var(--red-bg);color:var(--red);}
+  .b-wait{background:#eef0f3;color:var(--muted);}
+
+  .steps{display:inline-flex;gap:5px;align-items:center;}
+  .step{width:34px;height:6px;border-radius:999px;background:var(--line);}
+  .step.done{background:var(--green);}
+  .step.active{background:var(--amber);animation:pulse 1.1s ease-in-out infinite;}
+  .step.fail{background:var(--red);}
+  @keyframes pulse{50%{opacity:.4;}}
+  .steplabel{font-size:11px;color:var(--faint);margin-left:8px;}
+
+  .empty{padding:22px 18px;color:var(--faint);text-align:center;}
+  footer{margin-top:26px;color:var(--faint);font-size:12.5px;text-align:center;}
+</style>
+</head>
+<body>
+<header>
+  <div class="hin">
+    <div class="logo">G</div>
+    <div class="htxt">
+      <h1>GenAI Pipeline</h1>
+      <p>Distributed manuscript → audio drama engine</p>
+    </div>
+    <div class="live"><span class="dot"></span> Live</div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="section-title">Pipeline</div>
+  <div class="flow" id="flow"></div>
+
+  <div class="section-title">Overview</div>
+  <div class="cards" id="cards"></div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Submit a manuscript</h2><span class="meta">one line = one block</span></div>
+    <div class="panel-body">
+      <textarea id="ms">The lighthouse keeper lit the lamp at dusk.
+A storm rolled in from the grey Atlantic.
+She heard a knock against the iron door.</textarea>
+      <div class="btns">
+        <button class="primary" onclick="submitJob()">Submit job</button>
+        <button class="danger" onclick="submitPoison()">Submit poison pill</button>
+        <button onclick="burst()">Submit 6 jobs</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Jobs</h2><span class="meta" id="jobcount"></span></div>
+    <table>
+      <thead><tr><th>Job</th><th>Progress</th><th>Status</th><th>Created</th><th>Final asset</th></tr></thead>
+      <tbody id="jobs"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Dead Letter Queue</h2><span class="meta">after 3 retries · exponential backoff</span></div>
+    <table>
+      <thead><tr><th>Job</th><th>Stage</th><th>Attempts</th><th>Reason</th><th>At</th></tr></thead>
+      <tbody id="dlq"></tbody>
+    </table>
+  </div>
+
+  <footer>Idempotent consumers · transactional outbox · Redis semaphore (3 concurrent) · content-addressed cache · non-blocking DLQ · crash recovery</footer>
+</div>
+
+<script>
+async function j(u,o){const r=await fetch(u,o);return r.json();}
+const POISON="This manuscript is fine.\nPOISON pill block here.\nThe end.";
+function post(manuscript){return j("/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({manuscript})});}
+async function submitJob(){await post(document.getElementById("ms").value);refresh();}
+async function submitPoison(){await post(POISON);refresh();}
+async function burst(){for(let i=0;i<6;i++)await post(`Manuscript ${i}.\nA shared refrain across jobs.\nClosing line ${i}.`);refresh();}
+function fmt(s){return s?new Date(s).toLocaleTimeString():"—";}
+
+const MAP={PENDING:["todo","todo","todo"],PARSING:["active","todo","todo"],
+  PARSED:["done","todo","todo"],TTS_PROCESSING:["done","active","todo"],
+  TTS_DONE:["done","done","todo"],STITCHING:["done","done","active"],
+  COMPLETED:["done","done","done"]};
+function segsFor(job){
+  if(job.status==="FAILED"){
+    const stage=(job.error||"").split(":")[0];
+    const idx={parse:0,tts:1,stitch:2}[stage] ?? 1;
+    return [0,1,2].map(i=> i<idx?"done": i===idx?"fail":"todo");
+  }
+  return MAP[job.status]||["todo","todo","todo"];
+}
+function steps(job){
+  const labels=["Parse","TTS","Stitch"];
+  const segs=segsFor(job);
+  const cur=segs.indexOf("active"); const fail=segs.indexOf("fail");
+  const lab = fail>=0?`Failed at ${labels[fail]}` : cur>=0?labels[cur]:
+              job.status==="COMPLETED"?"Done":"Queued";
+  return '<span class="steps">'+segs.map(s=>`<span class="step ${s}"></span>`).join("")+
+         `<span class="steplabel">${lab}</span></span>`;
+}
+function badge(status){
+  const map={COMPLETED:["b-done","Completed"],FAILED:["b-fail","Failed"],PENDING:["b-wait","Pending"]};
+  const [c,t]=map[status]||["b-run",status.charAt(0)+status.slice(1).toLowerCase().replace("_"," ")];
+  return `<span class="badge ${c}">${t}</span>`;
+}
+
+async function refresh(){
+  try{
+    const [jobs,m,dlq,q]=await Promise.all([j("/jobs?limit=100"),j("/metrics"),j("/dlq"),j("/queues")]);
+    const by=m.jobs_by_status||{}; const at=s=>by[s]||0; const depth=n=>q[n]??0;
+    const backoff=Object.keys(q).filter(k=>k.startsWith("q.retry.")).reduce((a,k)=>a+q[k],0);
+    const used=m.tts_slots_in_use||0, lim=m.tts_slots_limit||3;
+
+    const nodes=[
+      {name:"Ingest",num:at("PENDING"),sub:"awaiting publish"},
+      {arrow:"→"},
+      {name:"Parse",num:at("PARSING"),sub:`queue ${depth("q.parse")}`},
+      {arrow:"→"},
+      {name:"TTS",num:at("TTS_PROCESSING"),sub:`${used}/${lim} slots in use`,slots:[used,lim]},
+      {arrow:"→"},
+      {name:"Stitch",num:at("STITCHING"),sub:`queue ${depth("q.stitch")}`},
+      {arrow:"→"},
+      {name:"Completed",num:at("COMPLETED"),sub:"finished"},
+      {arrow:backoff?`↻ ${backoff}`:"→"},
+      {name:"DLQ",num:m.dlq_total||0,sub:"dead-lettered",dlq:true},
+    ];
+    document.getElementById("flow").innerHTML=nodes.map(n=>{
+      if(n.arrow)return `<span class="arrow">${n.arrow}</span>`;
+      const on=n.num>0&&!n.dlq, hot=n.dlq&&n.num>0;
+      const slots=n.slots?`<div class="slots">${Array.from({length:n.slots[1]},(_,i)=>`<span class="slot ${i<n.slots[0]?"on":""}"></span>`).join("")}</div>`:"";
+      return `<div class="stage ${on?"on":""} ${n.dlq?"dlq":""} ${hot?"hot":""}">
+        <div class="s-name">${n.name}</div><div class="s-num">${n.num}</div>
+        <div class="s-sub">${n.sub}</div>${slots}</div>`;
+    }).join("");
+
+    const total=Object.values(by).reduce((a,b)=>a+b,0);
+    const inflight=["PENDING","PARSING","PARSED","TTS_PROCESSING","TTS_DONE","STITCHING"].reduce((a,s)=>a+at(s),0);
+    const C=[["Total jobs",total],["Completed",at("COMPLETED")],["In flight",inflight],
+             ["Dead-lettered",m.dlq_total||0],["Cache hits",m.tts_cache_entries||0],["Outbox backlog",m.outbox_pending||0]];
+    document.getElementById("cards").innerHTML=C.map(([k,v])=>`<div class="ccard"><div class="v">${v}</div><div class="k">${k}</div></div>`).join("");
+
+    document.getElementById("jobcount").textContent=`${jobs.length} shown`;
+    document.getElementById("jobs").innerHTML=jobs.length?jobs.map(job=>
+      `<tr><td class="mono">${job.job_id.slice(0,10)}</td><td>${steps(job)}</td>
+           <td>${badge(job.status)}</td><td class="mono">${fmt(job.created_at)}</td>
+           <td class="mono">${job.final_key||"—"}</td></tr>`).join("")
+      :`<tr><td class="empty" colspan="5">No jobs yet — submit one above.</td></tr>`;
+
+    document.getElementById("dlq").innerHTML=dlq.length?dlq.map(d=>
+      `<tr><td class="mono">${d.job_id.slice(0,10)}</td><td>${d.stage}</td><td>${d.attempts}</td>
+           <td>${d.reason}</td><td class="mono">${fmt(d.at)}</td></tr>`).join("")
+      :`<tr><td class="empty" colspan="5">Empty — no poisoned messages.</td></tr>`;
+  }catch(e){}
+}
+refresh(); setInterval(refresh,1500);
+</script>
+</body>
+</html>
