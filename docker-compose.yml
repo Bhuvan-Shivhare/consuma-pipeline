@@ -1,0 +1,123 @@
+# Distributed Multi-Modal GenAI Pipeline — local, fully self-contained.
+# One `docker-compose up` brings up every infrastructure primitive plus the
+# gateway, a pool of choreographing workers, the outbox relay and the reaper.
+name: genai-pipeline
+
+x-app-env: &app-env
+  DATABASE_URL: ${DATABASE_URL}
+  RABBITMQ_URL: ${RABBITMQ_URL}
+  REDIS_URL: ${REDIS_URL}
+  MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+  MINIO_BUCKET: ${MINIO_BUCKET}
+  PARSE_FAILURE_RATE: ${PARSE_FAILURE_RATE}
+  TTS_MAX_CONCURRENCY: ${TTS_MAX_CONCURRENCY}
+  MAX_RETRIES: ${MAX_RETRIES}
+  RETRY_BACKOFFS_MS: ${RETRY_BACKOFFS_MS}
+  STUCK_JOB_SECONDS: ${STUCK_JOB_SECONDS}
+  DEFAULT_WEBHOOK_URL: ${DEFAULT_WEBHOOK_URL}
+
+services:
+  # ---------- Infrastructure primitives ----------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # No host port published — services reach Postgres at postgres:5432 on the
+    # internal network. (Avoids clashing with any Postgres on the host.)
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports: ["5672:5672", "15672:15672"]   # 15672 = management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    # No host port published — services reach Redis at redis:6379 internally.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports: ["9000:9000", "9001:9001"]   # 9001 = MinIO console
+    volumes: ["miniodata:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  # ---------- Application services (same image, different commands) ----------
+  gateway:
+    build: .
+    command: uvicorn app.gateway:app --host 0.0.0.0 --port 8000
+    environment: *app-env
+    restart: unless-stopped
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_healthy}
+
+  worker:
+    build: .
+    command: python -m app.worker
+    environment: *app-env
+    restart: unless-stopped   # a crashed/killed worker self-heals and resumes
+    # Scale at runtime to prove distributed choreography:
+    #   docker compose up --scale worker=3
+    deploy:
+      replicas: 2
+    depends_on:
+      gateway: {condition: service_started}
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_healthy}
+
+  relay:
+    build: .
+    command: python -m app.outbox_relay
+    environment: *app-env
+    restart: unless-stopped
+    depends_on:
+      gateway: {condition: service_started}
+      rabbitmq: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+
+  reaper:
+    build: .
+    command: python -m app.reaper
+    environment: *app-env
+    restart: unless-stopped
+    depends_on:
+      gateway: {condition: service_started}
+      postgres: {condition: service_healthy}
+
+volumes:
+  pgdata:
+  miniodata:
