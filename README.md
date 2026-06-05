@@ -1,5 +1,5 @@
 # Distributed Multi-Modal GenAI Pipeline
-Demo : https://drive.google.com/file/d/1-c5PBdW8OQ75GTPpDjR-jqNT8n0ts3uo/view?usp=sharing
+Demo : https://drive.google.com/file/d/1tZ4QjdmZKspQWthDRD3LhVMQtmGuCOxJ/view?usp=sharing
 
 
 An asynchronous, **choreographed** (not orchestrated) microservices pipeline that
